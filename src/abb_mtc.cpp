@@ -182,26 +182,17 @@ mtc::Task MTCTaskNode::createTask()
 
       // Define the target pose for the end effector
       geometry_msgs::msg::PoseStamped target_pose_msg;
-      target_pose_msg.header.frame_id = "map";
-      target_pose_msg.pose.position.x = 1.5; // Adjust this based on your
-      target_pose_msg.pose.position.y = 0.5; // Centered in the y-axis
-      target_pose_msg.pose.position.z = 1.3; // Adjust this based on your
-      target_pose_msg.pose.orientation.w = 1.0; // No rotation
+      target_pose_msg.header.frame_id = "wall";
+      target_pose_msg.pose.position.x = -1.5; // Adjust this based on your
+      target_pose_msg.pose.position.y = -2.0; // Centered in the y-axis
+      target_pose_msg.pose.position.z = 0.5; // Adjust this based on your
+      target_pose_msg.pose.orientation.w = 0.5;
       stage->setPose(target_pose_msg);
-
-      Eigen::Isometry3d target_pose;
-      Eigen::Quaterniond q = Eigen::AngleAxisd(0, Eigen::Vector3d::UnitX()) *
-                            Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitY()) *
-                            Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitZ());
-      target_pose.linear() = q.matrix();
-      target_pose.translation().x() = 1.5; // Adjust this based on your robot's configuration
-      target_pose.translation().y() = 0.5; // Centered in the y-axis
-      target_pose.translation().z() = 1.3; // Adjust this based on your
 
       auto wrapper = std::make_unique<mtc::stages::ComputeIK>("compute IK", std::move(stage));
       wrapper->setMaxIKSolutions(8);
       wrapper->setMinSolutionDistance(1.0);
-      wrapper->setIKFrame(target_pose, hand_frame);
+      wrapper->setIKFrame(hand_frame);
       wrapper->properties().configureInitFrom(mtc::Stage::PARENT, { "eef", "group" });
       wrapper->properties().configureInitFrom(mtc::Stage::INTERFACE, { "target_pose" });
 
