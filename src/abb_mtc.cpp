@@ -140,11 +140,6 @@ mtc::Task MTCTaskNode::createTask()
   stage_home_pose->setGoal("home_configuration");
   task.add(std::move(stage_home_pose));
 
-  auto stage_ready_pose = std::make_unique<mtc::stages::MoveTo>("move to ready pose", interpolation_planner);
-  stage_ready_pose->setGroup(arm_group_name);
-  stage_ready_pose->setGoal("ready_configuration");
-  task.add(std::move(stage_ready_pose));
-
   auto stage_move_to_sand = std::make_unique<mtc::stages::Connect>(
     "move to sand",
     mtc::stages::Connect::GroupPlannerVector{ { arm_group_name, sampling_planner } }
@@ -169,7 +164,7 @@ mtc::Task MTCTaskNode::createTask()
 
       geometry_msgs::msg::Vector3Stamped vec;
       vec.header.frame_id = "wall";
-      vec.vector.z = -0.5; // Move towards the wall
+      vec.vector.y = 0.5; // Move towards the wall
       stage_move_towards->setDirection(vec);
       container->insert(std::move(stage_move_towards));
     }
@@ -181,12 +176,16 @@ mtc::Task MTCTaskNode::createTask()
       stage->setMonitoredStage(current_state_ptr);
 
       // Define the target pose for the end effector
+      // TODO: Adjust orientation of eef to face the wall
       geometry_msgs::msg::PoseStamped target_pose_msg;
       target_pose_msg.header.frame_id = "wall";
-      target_pose_msg.pose.position.x = -1.5; // Adjust this based on your
-      target_pose_msg.pose.position.y = -2.0; // Centered in the y-axis
-      target_pose_msg.pose.position.z = 0.5; // Adjust this based on your
-      target_pose_msg.pose.orientation.w = 0.5;
+      target_pose_msg.pose.position.x = 0.25; // Adjust this based on your
+      target_pose_msg.pose.position.y = -0.5; // Centered in the y-axis
+      target_pose_msg.pose.position.z = 0.7; // Adjust this based on your
+      Eigen::Quaterniond q = Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitX()) * 
+                            Eigen::AngleAxisd(0, Eigen::Vector3d::UnitY()) *
+                            Eigen::AngleAxisd(0, Eigen::Vector3d::UnitZ());
+      target_pose_msg.pose.orientation = tf2::toMsg(q);
       stage->setPose(target_pose_msg);
 
       auto wrapper = std::make_unique<mtc::stages::ComputeIK>("compute IK", std::move(stage));
