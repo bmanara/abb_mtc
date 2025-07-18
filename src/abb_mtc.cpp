@@ -48,6 +48,11 @@ MTCTaskNode::MTCTaskNode(const rclcpp::NodeOptions& options)
 
 void MTCTaskNode::setupPlanningScene()
 {
+  // TODO: Hopefully this will be flexible enough in the future, but not required for now
+  RCLCPP_INFO_STREAM(LOGGER, "Setting up planning scene...");
+  moveit::planning_interface::PlanningSceneInterface psi;
+
+  // Adding wall to planning scene
   moveit_msgs::msg::CollisionObject wall;
   wall.id = "wall";
   wall.header.frame_id = "map";
@@ -62,8 +67,29 @@ void MTCTaskNode::setupPlanningScene()
   wall_pose.orientation.w = 1.0; // No rotation
   wall.pose = wall_pose;
 
-  moveit::planning_interface::PlanningSceneInterface psi;
   psi.applyCollisionObject(wall);
+
+  // Adding underbelly to planning scene
+  moveit_msgs::msg::CollisionObject underbelly;
+  underbelly.id = "underbelly";
+  underbelly.header.frame_id = "map";
+  underbelly.primitives.resize(1);
+  underbelly.primitives[0].type = shape_msgs::msg::SolidPrimitive::BOX;
+  underbelly.primitives[0].dimensions = { 3.0, 2.5, 0.05 };
+
+  geometry_msgs::msg::Pose underbelly_pose;
+  underbelly_pose.position.x = 0.0;
+  underbelly_pose.position.y = 0.0;
+  underbelly_pose.position.z = 3.25; // Position the underbelly above the ground
+
+  Eigen::Quaterniond q = Eigen::AngleAxisd(M_PI * 0.225, Eigen::Vector3d::UnitX()) * 
+                        Eigen::AngleAxisd(0, Eigen::Vector3d::UnitY()) *
+                        Eigen::AngleAxisd(0, Eigen::Vector3d::UnitZ());
+  underbelly_pose.orientation = tf2::toMsg(q);
+  underbelly.pose = underbelly_pose;
+
+  psi.applyCollisionObject(underbelly);
+  RCLCPP_INFO_STREAM(LOGGER, "Planning scene setup complete");
 }
 
 void MTCTaskNode::doTask()
@@ -180,7 +206,7 @@ mtc::Task MTCTaskNode::createTask()
       geometry_msgs::msg::PoseStamped target_pose_msg;
       target_pose_msg.header.frame_id = "wall";
       target_pose_msg.pose.position.x = 0.25; // Adjust this based on your
-      target_pose_msg.pose.position.y = -0.5; // Centered in the y-axis
+      target_pose_msg.pose.position.y = -0.1; // Centered in the y-axis
       target_pose_msg.pose.position.z = 0.7; // Adjust this based on your
       Eigen::Quaterniond q = Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitX()) * 
                             Eigen::AngleAxisd(0, Eigen::Vector3d::UnitY()) *
@@ -205,6 +231,21 @@ mtc::Task MTCTaskNode::createTask()
                                     true);
       allow_collision_stage = stage_allow.get();
       container->insert(std::move(stage_allow));
+    }
+
+    {
+      // Now that arm and eef are in position, use MoveRelative to move the end effector towards the wall
+      auto stage = std::make_unique<mtc::stages::MoveRelative>("wall contact", cartesian_planner);
+      stage->properties().set("marker_ns", "wall_contact");
+      stage->properties().set("link", hand_frame);
+      stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
+      stage->setMinMaxDistance(0.1, 0.15);
+
+      geometry_msgs::msg::Vector3Stamped vec;
+      vec.header.frame_id = hand_frame;
+      vec.vector.z = -0.5; // Move towards the wall
+      stage->setDirection(vec);
+      container->insert(std::move(stage));
     }
 
     task.add(std::move(container));
