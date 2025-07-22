@@ -240,15 +240,15 @@ mtc::Task MTCTaskNode::createTask()
 
     {
       // Now that arm and eef are in position, use MoveRelative to move the end effector towards the wall
-      auto stage = std::make_unique<mtc::stages::MoveRelative>("wall contact", cartesian_planner);
+      auto stage = std::make_unique<mtc::stages::MoveRelative>("contact underbelly", cartesian_planner);
       stage->properties().set("marker_ns", "wall_contact");
       stage->properties().set("link", hand_frame);
       stage->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
-      stage->setMinMaxDistance(0.1, 0.15);
+      stage->setMinMaxDistance(0.3, 0.35);
 
       geometry_msgs::msg::Vector3Stamped vec;
       vec.header.frame_id = hand_frame;
-      vec.vector.z = -0.5; // Move towards the wall
+      vec.vector.z = -1.0; // Move towards the wall
       stage->setDirection(vec);
       container->insert(std::move(stage));
     }
