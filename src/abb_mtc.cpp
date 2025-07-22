@@ -75,12 +75,12 @@ void MTCTaskNode::setupPlanningScene()
   underbelly.header.frame_id = "map";
   underbelly.primitives.resize(1);
   underbelly.primitives[0].type = shape_msgs::msg::SolidPrimitive::BOX;
-  underbelly.primitives[0].dimensions = { 3.0, 2.5, 0.05 };
+  underbelly.primitives[0].dimensions = { 3.0, 2.4, 0.05 };
 
   geometry_msgs::msg::Pose underbelly_pose;
   underbelly_pose.position.x = 0.0;
-  underbelly_pose.position.y = 0.0;
-  underbelly_pose.position.z = 3.25; // Position the underbelly above the ground
+  underbelly_pose.position.y = 0.6;
+  underbelly_pose.position.z = 2.8; // Position the underbelly above the ground
 
   Eigen::Quaterniond q = Eigen::AngleAxisd(M_PI * 0.225, Eigen::Vector3d::UnitX()) * 
                         Eigen::AngleAxisd(0, Eigen::Vector3d::UnitY()) *
@@ -166,6 +166,11 @@ mtc::Task MTCTaskNode::createTask()
   stage_home_pose->setGoal("home_configuration");
   task.add(std::move(stage_home_pose));
 
+  auto stage_ready_pose = std::make_unique<mtc::stages::MoveTo>("move to ready pose", interpolation_planner);
+  stage_ready_pose->setGroup(arm_group_name);
+  stage_ready_pose->setGoal("ready_configuration");
+  task.add(std::move(stage_ready_pose));
+
   auto stage_move_to_sand = std::make_unique<mtc::stages::Connect>(
     "move to sand",
     mtc::stages::Connect::GroupPlannerVector{ { arm_group_name, sampling_planner } }
@@ -182,15 +187,16 @@ mtc::Task MTCTaskNode::createTask()
     container->properties().configureInitFrom(mtc::Stage::PARENT, { "eef", "group", "ik_frame" } );
 
     {
-      auto stage_move_towards = std::make_unique<mtc::stages::MoveRelative>("move towards wall", cartesian_planner);
+      auto stage_move_towards = std::make_unique<mtc::stages::MoveRelative>("move towards underbelly", cartesian_planner);
       stage_move_towards->properties().set("marker_ns", "move_towards_wall");
       stage_move_towards->properties().set("link", hand_frame);
       stage_move_towards->properties().configureInitFrom(mtc::Stage::PARENT, { "group" });
       stage_move_towards->setMinMaxDistance(0.1, 0.3);
 
       geometry_msgs::msg::Vector3Stamped vec;
-      vec.header.frame_id = "wall";
-      vec.vector.y = 0.5; // Move towards the wall
+      vec.header.frame_id = "underbelly";
+      vec.vector.y = -0.5; // Move towards the underbelly
+      vec.vector.z = 0.5; // Move towards the underbelly
       stage_move_towards->setDirection(vec);
       container->insert(std::move(stage_move_towards));
     }
@@ -202,13 +208,12 @@ mtc::Task MTCTaskNode::createTask()
       stage->setMonitoredStage(current_state_ptr);
 
       // Define the target pose for the end effector
-      // TODO: Adjust orientation of eef to face the wall
       geometry_msgs::msg::PoseStamped target_pose_msg;
-      target_pose_msg.header.frame_id = "wall";
-      target_pose_msg.pose.position.x = 0.25; // Adjust this based on your
+      target_pose_msg.header.frame_id = "underbelly";
+      target_pose_msg.pose.position.x = 0.5; // Adjust this based on your
       target_pose_msg.pose.position.y = -0.1; // Centered in the y-axis
-      target_pose_msg.pose.position.z = 0.7; // Adjust this based on your
-      Eigen::Quaterniond q = Eigen::AngleAxisd(M_PI / 2, Eigen::Vector3d::UnitX()) * 
+      target_pose_msg.pose.position.z = -0.4; // Adjust this based on your
+      Eigen::Quaterniond q = Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX()) * 
                             Eigen::AngleAxisd(0, Eigen::Vector3d::UnitY()) *
                             Eigen::AngleAxisd(0, Eigen::Vector3d::UnitZ());
       target_pose_msg.pose.orientation = tf2::toMsg(q);
@@ -225,8 +230,8 @@ mtc::Task MTCTaskNode::createTask()
     }
 
     {
-      auto stage_allow = std::make_unique<mtc::stages::ModifyPlanningScene>("allow collisions (eef, wall)");
-      stage_allow->allowCollisions("wall",
+      auto stage_allow = std::make_unique<mtc::stages::ModifyPlanningScene>("allow collisions (eef, underbelly)");
+      stage_allow->allowCollisions("underbelly",
                                     task.getRobotModel()->getJointModelGroup(hand_group_name)->getLinkModelNamesWithCollisionGeometry(),
                                     true);
       allow_collision_stage = stage_allow.get();
